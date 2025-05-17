@@ -19,7 +19,7 @@ On the basis of `Python >= 3.8` environment, install the necessary dependencies 
 conda create -n Janus-Pro-CXR python=3.10
 conda activate Janus-Pro-CXR
 pip install torch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 --index-url https://download.pytorch.org/whl/cu118
-pip install -r requirements
+pip install -r requirements.txt
 ```
 
 
