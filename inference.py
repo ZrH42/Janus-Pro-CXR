@@ -18,61 +18,89 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import torch
+import argparse
+import os
+import sys
 from transformers import AutoModelForCausalLM
 
 from janus.models import MultiModalityCausalLM, VLChatProcessor
 from janus.utils.io import load_pil_images
 
-# specify the path to the model
-model_path = r"D:\research\25.02.08-deepseek\LLaMA-Factory\output"
-vl_chat_processor: VLChatProcessor = VLChatProcessor.from_pretrained(model_path)
-tokenizer = vl_chat_processor.tokenizer
 
-vl_gpt: MultiModalityCausalLM = AutoModelForCausalLM.from_pretrained(
-    model_path, trust_remote_code=True
-)
-vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
+def run_inference(model_path, image_path):
+    """Run inference with the specified model on the given image"""
+    print(f"Loading model from {model_path}...")
+    vl_chat_processor = VLChatProcessor.from_pretrained(model_path)
+    tokenizer = vl_chat_processor.tokenizer
 
-conversation = [
-    {
-        "role": "User",
-        "content": "<image_placeholder>\nGive a radiology report based on the chest x-ray image, including FINDINGS and IMPRESSION.",
-        "images": [r"D:\research\25.02.08-deepseek\Janus-main\images\CXR1_1_IM-0001-4001.png"],
-    },
-    {"role": "Assistant", "content": ""},
-]
-# load images and prepare for inputs
-pil_images = load_pil_images(conversation)
-prepare_inputs = vl_chat_processor(
-    conversations=conversation, images=pil_images, force_batchify=True
-).to(vl_gpt.device)
+    vl_gpt = AutoModelForCausalLM.from_pretrained(
+        model_path, trust_remote_code=True
+    )
+    vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
+    
+    # Check if image exists
+    if not os.path.exists(image_path):
+        print(f"Error: Image not found at {image_path}")
+        return
+    
+    prompt = "Give a radiology report based on the chest x-ray image, including FINDINGS and IMPRESSION."
+    
+    # Set up conversation
+    conversation = [
+        {
+            "role": "User",
+            "content": f"<image_placeholder>\n{prompt}",
+            "images": [image_path],
+        },
+        {"role": "Assistant", "content": ""},
+    ]
+    
+    # Load images and prepare inputs
+    print(f"Processing image: {image_path}")
+    pil_images = load_pil_images(conversation)
+    prepare_inputs = vl_chat_processor(
+        conversations=conversation, images=pil_images, force_batchify=True
+    ).to(vl_gpt.device)
+    
+    # Generate image embeddings and run the model
+    inputs_embeds = vl_gpt.prepare_inputs_embeds(**prepare_inputs)
+    outputs = vl_gpt.language_model.generate(
+        inputs_embeds=inputs_embeds,
+        attention_mask=prepare_inputs.attention_mask,
+        pad_token_id=tokenizer.eos_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+        max_new_tokens=512,
+        do_sample=False,
+        use_cache=True,
+        output_scores=True,
+        return_dict_in_generate=True,
+    )
+    
+    # Get the generated sequence
+    generated_sequence = outputs.sequences[0].cpu().tolist()
+    answer = tokenizer.decode(generated_sequence, skip_special_tokens=True)
+    
+    
+    print("\n" + "=" * 50)
+    print("INFERENCE RESULTS")
+    print("=" * 50)
+    print(f"Input prompt: {prompt}")
+    print("-" * 50)
+    print(answer)
+    
+    return answer
 
-# # run image encoder to get the image embeddings
-inputs_embeds = vl_gpt.prepare_inputs_embeds(**prepare_inputs)
-# # run the model to get the response
-outputs = vl_gpt.language_model.generate(
-    inputs_embeds=inputs_embeds,
-    attention_mask=prepare_inputs.attention_mask,
-    pad_token_id=tokenizer.eos_token_id,
-    bos_token_id=tokenizer.bos_token_id,
-    eos_token_id=tokenizer.eos_token_id,
-    max_new_tokens=512,
-    do_sample=False,
-    use_cache=True,
-    output_scores=True,
-    return_dict_in_generate=True,
-)
 
-# Get the generated sequence
-generated_sequence = outputs.sequences[0].cpu().tolist()
-answer = tokenizer.decode(generated_sequence, skip_special_tokens=True)
+def main():
+    parser = argparse.ArgumentParser(description="Run inference with Janus-Pro-CXR model")
+    parser.add_argument("model_path", type=str, help="Path to the model directory")
+    parser.add_argument("image_path", type=str, help="Path to the chest X-ray image")
+    
+    args = parser.parse_args()
+    run_inference(args.model_path, args.image_path)
 
-# Calculate confidence scores
-scores = torch.stack(outputs.scores, dim=0)
-probs = torch.softmax(scores, dim=-1)
-token_confidences = torch.max(probs, dim=-1).values
-mean_confidence = token_confidences.mean().item()
 
-print(f"{prepare_inputs['sft_format'][0]}", answer)
-print(f"\nGeneration Confidence: {mean_confidence:.4f}")
+if __name__ == "__main__":
+    main()
 
