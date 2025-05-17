@@ -19,14 +19,15 @@ On the basis of `Python >= 3.8` environment, install the necessary dependencies 
 conda create -n Janus-Pro-CXR python=3.10
 conda activate Janus-Pro-CXR
 pip install torch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 --index-url https://download.pytorch.org/whl/cu118
-pip install -e .
+pip install -r requirements
 ```
 
 
 ### Inference Example
 
 ```shell
-python inference /path/to/your/model /path/to/your/image
+python inference.py ./Janus-Pro-CXR-Final ./retrospective_data/1.png
+python inference.py /path/to/your/model /path/to/your/image
 ```
 
 ## Citation
