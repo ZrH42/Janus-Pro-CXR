@@ -36,7 +36,7 @@ You can try feeding the results of a expert diagnostic model into the prompt.
 python inference.py ./Janus-Pro-CXR-Final ./retrospective_data/2.png --prompt "Expert analysis: Lung Opacity, Pleural Effusion, Pleural Other, Pneumothorax, Support Devices present.Please examine this X-ray and provide a radiology report including FINDINGS and IMPRESSION."
 ```
 
-For Sample 1, the comparative results across three paradigms are presented below.
+For Sample 2, the comparative results across three paradigms are presented below.
 
 |                            |                            report                            |                        DeepSeek label                        |
 | :------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
