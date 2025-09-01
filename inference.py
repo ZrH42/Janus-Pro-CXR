@@ -27,8 +27,11 @@ from janus.models import MultiModalityCausalLM, VLChatProcessor
 from janus.utils.io import load_pil_images
 
 
-def run_inference(model_path, image_path):
+def run_inference(model_path, image_path, prompt=None):
     """Run inference with the specified model on the given image"""
+    if prompt is None:
+        prompt = "Give a radiology report based on the chest x-ray image, including FINDINGS and IMPRESSION."
+
     print(f"Loading model from {model_path}...")
     vl_chat_processor = VLChatProcessor.from_pretrained(model_path)
     tokenizer = vl_chat_processor.tokenizer
@@ -37,14 +40,12 @@ def run_inference(model_path, image_path):
         model_path, trust_remote_code=True
     )
     vl_gpt = vl_gpt.to(torch.bfloat16).cuda().eval()
-    
+
     # Check if image exists
     if not os.path.exists(image_path):
         print(f"Error: Image not found at {image_path}")
         return
-    
-    prompt = "Give a radiology report based on the chest x-ray image, including FINDINGS and IMPRESSION."
-    
+
     # Set up conversation
     conversation = [
         {
@@ -54,14 +55,14 @@ def run_inference(model_path, image_path):
         },
         {"role": "Assistant", "content": ""},
     ]
-    
+
     # Load images and prepare inputs
     print(f"Processing image: {image_path}")
     pil_images = load_pil_images(conversation)
     prepare_inputs = vl_chat_processor(
         conversations=conversation, images=pil_images, force_batchify=True
     ).to(vl_gpt.device)
-    
+
     # Generate image embeddings and run the model
     inputs_embeds = vl_gpt.prepare_inputs_embeds(**prepare_inputs)
     outputs = vl_gpt.language_model.generate(
@@ -76,19 +77,18 @@ def run_inference(model_path, image_path):
         output_scores=True,
         return_dict_in_generate=True,
     )
-    
+
     # Get the generated sequence
     generated_sequence = outputs.sequences[0].cpu().tolist()
     answer = tokenizer.decode(generated_sequence, skip_special_tokens=True)
-    
-    
+
     print("\n" + "=" * 50)
     print("INFERENCE RESULTS")
     print("=" * 50)
     print(f"Input prompt: {prompt}")
     print("-" * 50)
     print(answer)
-    
+
     return answer
 
 
@@ -96,11 +96,17 @@ def main():
     parser = argparse.ArgumentParser(description="Run inference with Janus-Pro-CXR model")
     parser.add_argument("model_path", type=str, help="Path to the model directory")
     parser.add_argument("image_path", type=str, help="Path to the chest X-ray image")
-    
+    parser.add_argument(
+        "-p",
+        "--prompt",
+        type=str,
+        default="Give a radiology report based on the chest x-ray image, including FINDINGS and IMPRESSION.",
+        help="Custom prompt for the model (default: standard radiology report prompt)",
+    )
+
     args = parser.parse_args()
-    run_inference(args.model_path, args.image_path)
+    run_inference(args.model_path, args.image_path, args.prompt)
 
 
 if __name__ == "__main__":
     main()
-
